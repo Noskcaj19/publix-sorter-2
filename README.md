@@ -80,6 +80,26 @@ Only flat projects are supported. The command stops without making changes if
 any active task belongs to a section or is a subtask. Completed tasks are not
 included by Todoist's active-task API.
 
+## HTTP trigger
+
+Start the dependency-free HTTP server with the same Todoist and OpenRouter
+environment variables:
+
+```console
+uv run publix-sorter serve
+```
+
+Trigger a sort by sending a POST request with a project name or ID:
+
+```console
+curl -X POST "http://127.0.0.1:8000/todoist/sort?project=Groceries"
+```
+
+The endpoint returns the project and sorted tasks as JSON. The server is
+unauthenticated and binds only to `127.0.0.1` by default; do not expose it to an
+untrusted network. Override the bind address and port with `--host` and
+`--port` when needed. Pass `--debug` to include sorting-agent traces.
+
 ## Search Publix
 
 The underlying product-location search remains available:

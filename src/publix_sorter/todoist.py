@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
-from publix_sorter.sorter import SortedItem
+from publix_sorter.sorter import LocationCache, SortedItem, sort_grocery_items
 
 
 TODOIST_API_URL = "https://api.todoist.com/api/v1"
@@ -304,3 +304,21 @@ class TodoistClient:
         for batch in batches:
             self._send_commands(batch)
         return sorted_tasks
+
+
+def sort_todoist_project(
+    project_reference: str,
+    todoist_token: str,
+    openrouter_api_key: str,
+    cache: LocationCache,
+) -> tuple[TodoistProject, list[TodoistSortedTask]]:
+    client = TodoistClient(todoist_token)
+    project = client.resolve_project(project_reference)
+    tasks = client.tasks(project.id)
+    if not tasks:
+        raise TodoistError(f'Todoist project "{project.name}" has no active tasks')
+    require_flat_tasks(tasks)
+    sorted_items = sort_grocery_items(
+        [task.content for task in tasks], openrouter_api_key, cache
+    )
+    return project, client.apply_sort(tasks, sorted_items)

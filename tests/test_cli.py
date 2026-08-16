@@ -2,6 +2,7 @@ import io
 import logging
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 from publix_sorter.cli import (
@@ -61,10 +62,9 @@ class GroceryInputTests(unittest.TestCase):
         {"OPENROUTER_API_KEY": "openrouter-key", "TODOIST_API_TOKEN": "todoist-key"},
     )
     @patch("publix_sorter.cli.LocationCache")
-    @patch("publix_sorter.cli.sort_grocery_items")
-    @patch("publix_sorter.cli.TodoistClient")
+    @patch("publix_sorter.cli.sort_todoist_project")
     def test_sorts_todoist_project_and_prints_location_labels(
-        self, client_class, sort_mock, cache_mock
+        self, sort_project_mock, cache_mock
     ) -> None:
         project = TodoistProject("project-1", "Groceries")
         pasta = TodoistTask(
@@ -85,17 +85,13 @@ class GroceryInputTests(unittest.TestCase):
             child_order=2,
             labels=(),
         )
-        client = client_class.return_value
-        client.resolve_project.return_value = project
-        client.tasks.return_value = [pasta, grapes]
-        sort_mock.return_value = [
-            SortedItem("green grapes", "Produce"),
-            SortedItem("penne pasta", "Aisle 6"),
-        ]
-        client.apply_sort.return_value = [
-            TodoistSortedTask(grapes, "Produce", "Publix: Produce"),
-            TodoistSortedTask(pasta, "Aisle 6", "Publix: 6"),
-        ]
+        sort_project_mock.return_value = (
+            project,
+            [
+                TodoistSortedTask(grapes, "Produce", "Publix: Produce"),
+                TodoistSortedTask(pasta, "Aisle 6", "Publix: 6"),
+            ],
+        )
         output = io.StringIO()
 
         with redirect_stdout(output):
@@ -107,11 +103,39 @@ class GroceryInputTests(unittest.TestCase):
             "- green grapes  # Publix: Produce\n"
             "- penne pasta  # Publix: 6\n",
         )
-        sort_mock.assert_called_once()
-        client.apply_sort.assert_called_once_with(
-            [pasta, grapes], sort_mock.return_value
+        sort_project_mock.assert_called_once_with(
+            "Groceries",
+            "todoist-key",
+            "openrouter-key",
+            cache_mock.return_value,
         )
         cache_mock.assert_called_once()
+
+    @patch.dict(
+        "os.environ",
+        {"OPENROUTER_API_KEY": "openrouter-key", "TODOIST_API_TOKEN": "todoist-key"},
+    )
+    @patch("publix_sorter.cli.run_server")
+    def test_starts_http_server(self, run_server_mock) -> None:
+        main(
+            [
+                "serve",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8765",
+                "--cache",
+                "test-cache.csv",
+            ]
+        )
+
+        run_server_mock.assert_called_once_with(
+            "127.0.0.1",
+            8765,
+            "todoist-key",
+            "openrouter-key",
+            Path("test-cache.csv"),
+        )
 
 
 if __name__ == "__main__":

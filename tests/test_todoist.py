@@ -1,15 +1,17 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
-from publix_sorter.sorter import SortedItem
+from publix_sorter.sorter import LocationCache, SortedItem
 from publix_sorter.todoist import (
     MAX_LABEL_LENGTH,
     TodoistClient,
     TodoistError,
     TodoistProject,
+    TodoistSortedTask,
     TodoistTask,
     location_label,
     require_flat_tasks,
+    sort_todoist_project,
 )
 
 
@@ -120,6 +122,32 @@ class TodoistReadingTests(unittest.TestCase):
 
 
 class TodoistSortingTests(unittest.TestCase):
+    @patch("publix_sorter.todoist.sort_grocery_items")
+    @patch("publix_sorter.todoist.TodoistClient")
+    def test_runs_complete_project_sort_workflow(
+        self, client_class, sort_mock
+    ) -> None:
+        project = TodoistProject("project-1", "Groceries")
+        tasks = [task("milk", "whole milk", 1)]
+        sorted_items = [SortedItem("whole milk", "Rear Left - Milk")]
+        sorted_tasks = [
+            TodoistSortedTask(tasks[0], "Rear Left - Milk", "Publix: Rear Left - Milk")
+        ]
+        client = client_class.return_value
+        client.resolve_project.return_value = project
+        client.tasks.return_value = tasks
+        client.apply_sort.return_value = sorted_tasks
+        sort_mock.return_value = sorted_items
+        cache = MagicMock(spec=LocationCache)
+
+        result = sort_todoist_project(
+            "Groceries", "todoist-key", "openrouter-key", cache
+        )
+
+        self.assertEqual(result, (project, sorted_tasks))
+        sort_mock.assert_called_once_with(["whole milk"], "openrouter-key", cache)
+        client.apply_sort.assert_called_once_with(tasks, sorted_items)
+
     def test_rejects_sections_and_subtasks(self) -> None:
         with self.assertRaisesRegex(TodoistError, "sections"):
             require_flat_tasks([task("1", "milk", 1, section_id="section-1")])

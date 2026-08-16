@@ -12,6 +12,7 @@ from publix_sorter.publix import (
     PublixError,
     search,
 )
+from publix_sorter.server import run_server
 from publix_sorter.sorter import (
     LocationCache,
     SorterError,
@@ -19,9 +20,8 @@ from publix_sorter.sorter import (
     sort_grocery_items,
 )
 from publix_sorter.todoist import (
-    TodoistClient,
     TodoistError,
-    require_flat_tasks,
+    sort_todoist_project,
 )
 
 
@@ -127,6 +127,23 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="log sorting-agent inputs, outputs, and tool calls to stderr",
     )
+
+    serve_parser = commands.add_parser(
+        "serve", help="serve the Todoist sorting HTTP endpoint"
+    )
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument(
+        "--cache",
+        type=Path,
+        default=default_cache_path(),
+        help="location cache CSV path (default: %(default)s)",
+    )
+    serve_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="log sorting-agent inputs, outputs, and tool calls to stderr",
+    )
     return parser
 
 
@@ -134,6 +151,7 @@ def main(argv: list[str] | None = None) -> None:
     raw_arguments = list(sys.argv[1:] if argv is None else argv)
     if raw_arguments and raw_arguments[0] not in {
         "search",
+        "serve",
         "sort",
         "todoist",
         "-h",
@@ -157,6 +175,25 @@ def main(argv: list[str] | None = None) -> None:
         _print_products(products)
         return
 
+    if args.command == "serve":
+        todoist_token = os.environ.get("TODOIST_API_TOKEN")
+        if not todoist_token:
+            parser.exit(1, "error: TODOIST_API_TOKEN is not set\n")
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            parser.exit(1, "error: OPENROUTER_API_KEY is not set\n")
+        try:
+            run_server(
+                args.host,
+                args.port,
+                todoist_token,
+                api_key,
+                args.cache.expanduser(),
+            )
+        except OSError as error:
+            parser.exit(1, f"error: Could not start HTTP server: {error}\n")
+        return
+
     if args.command == "todoist":
         try:
             todoist_token = os.environ.get("TODOIST_API_TOKEN")
@@ -166,18 +203,12 @@ def main(argv: list[str] | None = None) -> None:
             if not api_key:
                 raise SorterError("OPENROUTER_API_KEY is not set")
 
-            client = TodoistClient(todoist_token)
-            project = client.resolve_project(args.project)
-            tasks = client.tasks(project.id)
-            if not tasks:
-                raise TodoistError(f'Todoist project "{project.name}" has no active tasks')
-            require_flat_tasks(tasks)
-            sorted_items = sort_grocery_items(
-                [task.content for task in tasks],
+            project, sorted_tasks = sort_todoist_project(
+                args.project,
+                todoist_token,
                 api_key,
                 LocationCache(args.cache.expanduser()),
             )
-            sorted_tasks = client.apply_sort(tasks, sorted_items)
         except (SorterError, TodoistError) as error:
             parser.exit(1, f"error: {error}\n")
 
