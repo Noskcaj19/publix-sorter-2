@@ -17,6 +17,11 @@ from publix_sorter.sorter import (
     default_cache_path,
     sort_grocery_items,
 )
+from publix_sorter.todoist import (
+    TodoistClient,
+    TodoistError,
+    require_flat_tasks,
+)
 
 
 def _print_products(products: list[Product]) -> None:
@@ -100,12 +105,29 @@ def _build_parser() -> argparse.ArgumentParser:
         default=default_cache_path(),
         help="location cache CSV path (default: %(default)s)",
     )
+
+    todoist_parser = commands.add_parser(
+        "todoist", help="sort and label a flat Todoist grocery project"
+    )
+    todoist_parser.add_argument("project", help="Todoist project name or ID")
+    todoist_parser.add_argument(
+        "--cache",
+        type=Path,
+        default=default_cache_path(),
+        help="location cache CSV path (default: %(default)s)",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     raw_arguments = list(sys.argv[1:] if argv is None else argv)
-    if raw_arguments and raw_arguments[0] not in {"search", "sort", "-h", "--help"}:
+    if raw_arguments and raw_arguments[0] not in {
+        "search",
+        "sort",
+        "todoist",
+        "-h",
+        "--help",
+    }:
         raw_arguments.insert(0, "search")
     parser = _build_parser()
     args = parser.parse_args(raw_arguments)
@@ -120,6 +142,36 @@ def main(argv: list[str] | None = None) -> None:
         print(f"Store: {STORE_NAME} (#{STORE_NUMBER})")
         print(f'Search: "{search_term}"\n')
         _print_products(products)
+        return
+
+    if args.command == "todoist":
+        try:
+            todoist_token = os.environ.get("TODOIST_API_TOKEN")
+            if not todoist_token:
+                raise TodoistError("TODOIST_API_TOKEN is not set")
+            api_key = os.environ.get("OPENROUTER_API_KEY")
+            if not api_key:
+                raise SorterError("OPENROUTER_API_KEY is not set")
+
+            client = TodoistClient(todoist_token)
+            project = client.resolve_project(args.project)
+            tasks = client.tasks(project.id)
+            if not tasks:
+                raise TodoistError(f'Todoist project "{project.name}" has no active tasks')
+            require_flat_tasks(tasks)
+            sorted_items = sort_grocery_items(
+                [task.content for task in tasks],
+                api_key,
+                LocationCache(args.cache.expanduser()),
+            )
+            sorted_tasks = client.apply_sort(tasks, sorted_items)
+        except (SorterError, TodoistError) as error:
+            parser.exit(1, f"error: {error}\n")
+
+        print(f'Sorted {len(sorted_tasks)} tasks in Todoist project "{project.name}".')
+        for result in sorted_tasks:
+            comment = f"  # {result.label}" if result.label else ""
+            print(f"- {result.task.content}{comment}")
         return
 
     try:

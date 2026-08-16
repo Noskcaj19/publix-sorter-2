@@ -1,6 +1,6 @@
 [project]
 name = "publix-sorter"
-version = "0.2.0"
+version = "0.3.0"
 description = "Sort a grocery list using Publix locations"
 readme = "README.md"
 requires-python = ">=3.11"

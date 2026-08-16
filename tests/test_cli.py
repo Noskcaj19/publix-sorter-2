@@ -10,6 +10,11 @@ from publix_sorter.cli import (
     main,
 )
 from publix_sorter.sorter import SortedItem
+from publix_sorter.todoist import (
+    TodoistProject,
+    TodoistSortedTask,
+    TodoistTask,
+)
 
 
 class GroceryInputTests(unittest.TestCase):
@@ -43,6 +48,63 @@ class GroceryInputTests(unittest.TestCase):
         self.assertEqual(
             output.getvalue(),
             "- penne pasta  # Aisle 6 - Pasta & Pasta Sauce\n- mystery item\n",
+        )
+        cache_mock.assert_called_once()
+
+    @patch.dict(
+        "os.environ",
+        {"OPENROUTER_API_KEY": "openrouter-key", "TODOIST_API_TOKEN": "todoist-key"},
+    )
+    @patch("publix_sorter.cli.LocationCache")
+    @patch("publix_sorter.cli.sort_grocery_items")
+    @patch("publix_sorter.cli.TodoistClient")
+    def test_sorts_todoist_project_and_prints_location_labels(
+        self, client_class, sort_mock, cache_mock
+    ) -> None:
+        project = TodoistProject("project-1", "Groceries")
+        pasta = TodoistTask(
+            id="task-1",
+            content="penne pasta",
+            project_id=project.id,
+            section_id=None,
+            parent_id=None,
+            child_order=1,
+            labels=(),
+        )
+        grapes = TodoistTask(
+            id="task-2",
+            content="green grapes",
+            project_id=project.id,
+            section_id=None,
+            parent_id=None,
+            child_order=2,
+            labels=(),
+        )
+        client = client_class.return_value
+        client.resolve_project.return_value = project
+        client.tasks.return_value = [pasta, grapes]
+        sort_mock.return_value = [
+            SortedItem("green grapes", "Produce"),
+            SortedItem("penne pasta", "Aisle 6"),
+        ]
+        client.apply_sort.return_value = [
+            TodoistSortedTask(grapes, "Produce", "Publix: Produce"),
+            TodoistSortedTask(pasta, "Aisle 6", "Publix: Aisle 6"),
+        ]
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            main(["todoist", "Groceries"])
+
+        self.assertEqual(
+            output.getvalue(),
+            'Sorted 2 tasks in Todoist project "Groceries".\n'
+            "- green grapes  # Publix: Produce\n"
+            "- penne pasta  # Publix: Aisle 6\n",
+        )
+        sort_mock.assert_called_once()
+        client.apply_sort.assert_called_once_with(
+            [pasta, grapes], sort_mock.return_value
         )
         cache_mock.assert_called_once()
 

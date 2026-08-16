@@ -44,6 +44,32 @@ the first five Publix results and are cached at
 `~/.cache/publix-sorter/locations.csv`. Override that path with `--cache` or
 `PUBLIX_SORTER_CACHE`.
 
+## Sort a Todoist project
+
+Set a Todoist API token from Todoist's **Settings → Integrations** page, along
+with the OpenRouter key:
+
+```console
+export TODOIST_API_TOKEN=your-token
+export OPENROUTER_API_KEY=your-key
+```
+
+Then provide a project name or ID:
+
+```console
+uv run publix-sorter todoist "Groceries"
+```
+
+The command reads all active tasks in the project, sorts them through the same
+Publix workflow, and writes the new order back to Todoist. It preserves
+unrelated labels and replaces any prior `Publix: ` label with the current store
+location, such as `Publix: Aisle 6 - Pasta & Pasta Sauce`. Unknown locations
+have no Publix label.
+
+Only flat projects are supported. The command stops without making changes if
+any active task belongs to a section or is a subtask. Completed tasks are not
+included by Todoist's active-task API.
+
 ## Search Publix
 
 The underlying product-location search remains available:
