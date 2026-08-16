@@ -1,0 +1,34 @@
+services:
+  cache-init:
+    image: publix-sorter:latest
+    user: "0:0"
+    command: ["chown", "-R", "1000:1000", "/home/app/.cache/publix-sorter"]
+    volumes:
+      - cache:/home/app/.cache/publix-sorter
+    restart: "no"
+
+  publix-sorter:
+    build:
+      context: .
+      target: run
+    image: publix-sorter:latest
+    container_name: publix-sorter
+    depends_on:
+      cache-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    volumes:
+      - cache:/home/app/.cache/publix-sorter
+    expose:
+      - "8000"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.publix-sorter.rule=Host(`publix-sorter.noskcaj19.com`)"
+      - "traefik.http.routers.publix-sorter.entrypoints=websecure"
+      - "traefik.http.routers.publix-sorter.tls=true"
+      - "traefik.http.services.publix-sorter.loadbalancer.server.port=8000"
+
+volumes:
+  cache:
