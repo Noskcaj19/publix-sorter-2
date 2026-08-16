@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import logging
 import os
 from collections import Counter
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from publix_sorter.publix import Product, PublixError, search
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "openai/gpt-5.6-luna"
 TOOL_NAME = "grocery_location"
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You sort a grocery list into walking order for Publix
 Chasewood Plaza, store 228.
@@ -278,6 +281,8 @@ def sort_grocery_items(
             "content": json.dumps({"grocery_items": items}),
         },
     ]
+    logger.debug("Sorting agent system input text:\n%s", messages[0]["content"])
+    logger.debug("Sorting agent user input text:\n%s", messages[1]["content"])
     payload = {
         "model": MODEL,
         "messages": messages,
@@ -286,13 +291,31 @@ def sort_grocery_items(
         "response_format": _output_schema(len(items)),
     }
 
-    for _ in range(max(4, len(items) + 2)):
+    for turn in range(1, max(4, len(items) + 2) + 1):
+        logger.debug("Sorting agent turn %d", turn)
         response = _chat_completion(api_key, payload)
         message = _response_message(response)
+        content = message.get("content")
+        logger.debug(
+            "Sorting agent output text:\n%s",
+            content if content is not None else "<none>",
+        )
         tool_calls = message.get("tool_calls") or []
         messages.append(message)
         if not tool_calls:
-            return _parse_sorted_items(message.get("content"), items)
-        messages.extend(_tool_result(tool_call, cache) for tool_call in tool_calls)
+            return _parse_sorted_items(content, items)
+        for tool_call in tool_calls:
+            logger.debug(
+                "Sorting agent tool call:\n%s",
+                json.dumps(tool_call, indent=2, ensure_ascii=False),
+            )
+        tool_results = [_tool_result(tool_call, cache) for tool_call in tool_calls]
+        for tool_result in tool_results:
+            logger.debug(
+                "Sorting agent tool result (%s):\n%s",
+                tool_result["name"],
+                tool_result["content"],
+            )
+        messages.extend(tool_results)
 
     raise SorterError("OpenRouter exceeded the grocery-location lookup limit")

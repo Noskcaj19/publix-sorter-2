@@ -113,13 +113,21 @@ class ModelSortingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cache = LocationCache(Path(directory) / "locations.csv")
             cache.remember("penne pasta", [Product("Penne", "Aisle 6")])
-            result = sort_grocery_items(
-                ["penne pasta", "cheddar cheese"], "test-key", cache
-            )
+            with self.assertLogs("publix_sorter.sorter", level="DEBUG") as logs:
+                result = sort_grocery_items(
+                    ["penne pasta", "cheddar cheese"], "test-key", cache
+                )
 
         self.assertEqual(
             [item.item for item in result], ["cheddar cheese", "penne pasta"]
         )
+        trace = "\n".join(logs.output)
+        self.assertIn("Sorting agent system input text", trace)
+        self.assertIn("Sorting agent user input text", trace)
+        self.assertIn("Sorting agent output text", trace)
+        self.assertIn("Sorting agent tool call", trace)
+        self.assertIn("Sorting agent tool result (grocery_location)", trace)
+        self.assertIn("cheddar cheese", trace)
         search_mock.assert_called_once_with("cheddar cheese")
         self.assertEqual(chat_mock.call_count, 2)
         system_prompt = chat_mock.call_args_list[0].args[1]["messages"][0]["content"]

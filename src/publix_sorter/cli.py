@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import re
 import sys
@@ -105,6 +106,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=default_cache_path(),
         help="location cache CSV path (default: %(default)s)",
     )
+    sort_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="log sorting-agent inputs, outputs, and tool calls to stderr",
+    )
 
     todoist_parser = commands.add_parser(
         "todoist", help="sort and label a flat Todoist grocery project"
@@ -115,6 +121,11 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=default_cache_path(),
         help="location cache CSV path (default: %(default)s)",
+    )
+    todoist_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="log sorting-agent inputs, outputs, and tool calls to stderr",
     )
     return parser
 
@@ -131,6 +142,8 @@ def main(argv: list[str] | None = None) -> None:
         raw_arguments.insert(0, "search")
     parser = _build_parser()
     args = parser.parse_args(raw_arguments)
+    if getattr(args, "debug", False):
+        logging.basicConfig(level=logging.DEBUG, format="[debug] %(message)s")
 
     if args.command == "search":
         search_term = " ".join(args.search_term)

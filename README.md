@@ -44,6 +44,14 @@ Location searches return the first five Publix results and are cached at
 `~/.cache/publix-sorter/locations.csv`. Override that path with `--cache` or
 `PUBLIX_SORTER_CACHE`.
 
+Add `--debug` to write the sorting agent's system and user input, each output
+text, and every tool call and result to stderr without changing the sorted
+stdout output:
+
+```console
+uv run publix-sorter sort --debug "milk" "penne pasta"
+```
+
 ## Sort a Todoist project
 
 Set a Todoist API token from Todoist's **Settings → Integrations** page, along
@@ -58,6 +66,7 @@ Then provide a project name or ID:
 
 ```console
 uv run publix-sorter todoist "Groceries"
+uv run publix-sorter todoist --debug "Groceries"
 ```
 
 The command reads all active tasks in the project, sorts them through the same

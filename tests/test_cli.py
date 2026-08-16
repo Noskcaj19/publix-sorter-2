@@ -1,4 +1,5 @@
 import io
+import logging
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
@@ -31,10 +32,11 @@ class GroceryInputTests(unittest.TestCase):
             _read_grocery_items(["  "], None)
 
     @patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"})
+    @patch("publix_sorter.cli.logging.basicConfig")
     @patch("publix_sorter.cli.LocationCache")
     @patch("publix_sorter.cli.sort_grocery_items")
     def test_prints_known_locations_as_comments(
-        self, sort_mock, cache_mock
+        self, sort_mock, cache_mock, logging_mock
     ) -> None:
         sort_mock.return_value = [
             SortedItem("penne pasta", "Aisle 6 - Pasta & Pasta Sauce"),
@@ -43,13 +45,16 @@ class GroceryInputTests(unittest.TestCase):
         output = io.StringIO()
 
         with redirect_stdout(output):
-            main(["sort", "penne pasta", "mystery item"])
+            main(["sort", "--debug", "penne pasta", "mystery item"])
 
         self.assertEqual(
             output.getvalue(),
             "- penne pasta  # Aisle 6 - Pasta & Pasta Sauce\n- mystery item\n",
         )
         cache_mock.assert_called_once()
+        logging_mock.assert_called_once_with(
+            level=logging.DEBUG, format="[debug] %(message)s"
+        )
 
     @patch.dict(
         "os.environ",
