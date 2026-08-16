@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
@@ -61,6 +62,9 @@ def location_label(location: str) -> str | None:
     normalized = location.strip()
     if normalized.casefold() in UNAVAILABLE_LOCATIONS:
         return None
+    aisle = re.match(r"^aisle\s+(\d+)\b", normalized, flags=re.IGNORECASE)
+    if aisle:
+        normalized = aisle.group(1)
     available_length = MAX_LABEL_LENGTH - len(LOCATION_LABEL_PREFIX)
     normalized = normalized[:available_length].rstrip()
     return f"{LOCATION_LABEL_PREFIX}{normalized}" if normalized else None

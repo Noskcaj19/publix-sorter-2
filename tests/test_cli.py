@@ -89,7 +89,7 @@ class GroceryInputTests(unittest.TestCase):
         ]
         client.apply_sort.return_value = [
             TodoistSortedTask(grapes, "Produce", "Publix: Produce"),
-            TodoistSortedTask(pasta, "Aisle 6", "Publix: Aisle 6"),
+            TodoistSortedTask(pasta, "Aisle 6", "Publix: 6"),
         ]
         output = io.StringIO()
 
@@ -100,7 +100,7 @@ class GroceryInputTests(unittest.TestCase):
             output.getvalue(),
             'Sorted 2 tasks in Todoist project "Groceries".\n'
             "- green grapes  # Publix: Produce\n"
-            "- penne pasta  # Publix: Aisle 6\n",
+            "- penne pasta  # Publix: 6\n",
         )
         sort_mock.assert_called_once()
         client.apply_sort.assert_called_once_with(

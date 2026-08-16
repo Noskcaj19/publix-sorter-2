@@ -157,7 +157,7 @@ class TodoistSortingTests(unittest.TestCase):
         self.assertEqual(updates["grapes"], ["organic", "Publix: Produce"])
         self.assertEqual(
             updates["pasta"],
-            ["weekly", "Publix: Aisle 6 - Pasta & Pasta Sauce"],
+            ["weekly", "Publix: 6"],
         )
         reorder = next(
             command for command in commands if command["type"] == "item_reorder"
@@ -188,6 +188,12 @@ class TodoistSortingTests(unittest.TestCase):
 
         self.assertIsNotNone(label)
         self.assertEqual(len(label or ""), MAX_LABEL_LENGTH)
+
+    def test_aisle_label_contains_only_its_number(self) -> None:
+        self.assertEqual(
+            location_label("Aisle 12 - Canned Vegetables"), "Publix: 12"
+        )
+        self.assertEqual(location_label("Produce"), "Publix: Produce")
 
     def test_batches_at_most_one_hundred_sync_commands(self) -> None:
         client = TodoistClient("token")

@@ -63,8 +63,9 @@ uv run publix-sorter todoist "Groceries"
 The command reads all active tasks in the project, sorts them through the same
 Publix workflow, and writes the new order back to Todoist. It preserves
 unrelated labels and replaces any prior `Publix: ` label with the current store
-location, such as `Publix: Aisle 6 - Pasta & Pasta Sauce`. Unknown locations
-have no Publix label.
+location. Numbered aisles use only the aisle number, such as `Publix: 6`, while
+departments use labels such as `Publix: Produce`. Unknown locations have no
+Publix label.
 
 Only flat projects are supported. The command stops without making changes if
 any active task belongs to a section or is a subtask. Completed tasks are not
