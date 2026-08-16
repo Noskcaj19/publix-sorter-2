@@ -8,6 +8,7 @@ from unittest.mock import patch
 from publix_sorter.publix import Product
 from publix_sorter.sorter import (
     LocationCache,
+    SYSTEM_PROMPT,
     SorterError,
     _location_lookup,
     _parse_sorted_items,
@@ -43,6 +44,18 @@ class LocationCacheTests(unittest.TestCase):
 
 
 class ModelSortingTests(unittest.TestCase):
+    def test_places_cheese_after_nine_and_other_dairy_after_all_aisles(
+        self,
+    ) -> None:
+        aisle_nine = SYSTEM_PROMPT.index("Numbered aisles 1 through 9")
+        cheese = SYSTEM_PROMPT.index("Cheese, except")
+        aisle_ten = SYSTEM_PROMPT.index("Numbered aisles 10 and higher")
+        other_dairy = SYSTEM_PROMPT.index("All other dairy products")
+
+        self.assertLess(aisle_nine, cheese)
+        self.assertLess(cheese, aisle_ten)
+        self.assertLess(aisle_ten, other_dairy)
+
     @patch("publix_sorter.sorter._chat_completion")
     @patch("publix_sorter.sorter.search")
     def test_runs_location_tool_and_returns_model_order(

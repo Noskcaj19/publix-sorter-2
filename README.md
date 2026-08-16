@@ -38,9 +38,9 @@ uv run publix-sorter sort --file groceries.txt
 cat groceries.txt | uv run publix-sorter sort
 ```
 
-The model sorts Deli first, then Produce and other departments, numbered aisles
-in ascending order, Milk, Raw Meat, and Frozen last. Location searches return
-the first five Publix results and are cached at
+The model sorts Deli first, then Produce and other departments, aisles 1–9,
+Cheese, remaining numbered aisles, other Dairy, Raw Meat, and Frozen last.
+Location searches return the first five Publix results and are cached at
 `~/.cache/publix-sorter/locations.csv`. Override that path with `--cache` or
 `PUBLIX_SORTER_CACHE`.
 

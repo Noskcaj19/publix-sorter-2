@@ -29,11 +29,13 @@ exactly in the final result.
 Sort by this store route:
 1. Deli.
 2. Produce, then other unnumbered departments such as Bakery, Seafood, and
-   Floral.
-3. Numbered aisles in ascending numeric order.
-4. Milk.
-5. Raw meat.
-6. Frozen items last, even when their location also includes an aisle number.
+   Floral, except for the departments listed later in this route.
+3. Numbered aisles 1 through 9 in ascending numeric order.
+4. Cheese, except cheese selected from the Deli stays with the Deli items.
+5. Numbered aisles 10 and higher in ascending numeric order.
+6. All other dairy products, including milk, eggs, yogurt, butter, and cream.
+7. Raw meat.
+8. Frozen items last, even when their location also includes an aisle number.
 
 Use the original input order as the tie-breaker for items in the same location
 or for locations that cannot be determined. Return each item exactly once.
