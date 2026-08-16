@@ -1,104 +1,22 @@
 import argparse
-import json
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from html.parser import HTMLParser
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
-from urllib.request import Request, urlopen
+import os
+import re
+import sys
+from pathlib import Path
 
-
-SEARCH_URL = "https://www.publix.com/search"
-STORE_NAME = "Chasewood Plaza"
-STORE_NUMBER = 228
-STORE_OPTIONS = "ACDFJNORTUV"
-
-
-@dataclass(frozen=True)
-class Product:
-    name: str
-    location: str
-
-
-class PublixError(RuntimeError):
-    """Raised when Publix cannot be queried or parsed."""
-
-
-class _SearchResultsParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.results_json: str | None = None
-
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
-        for name, value in attrs:
-            if name == ":first-search-results":
-                self.results_json = value
-                return
-
-
-def _store_cookie() -> str:
-    store = {
-        "CreationDate": datetime.now(timezone.utc)
-        .isoformat(timespec="milliseconds")
-        .replace("+00:00", "Z"),
-        "Option": STORE_OPTIONS,
-        "ShortStoreName": STORE_NAME,
-        "StoreName": STORE_NAME,
-        "StoreNumber": STORE_NUMBER,
-    }
-    value = quote(json.dumps(store, separators=(",", ":")), safe="")
-    return f"Store={value}"
-
-
-def _search_request(search_term: str) -> Request:
-    query = urlencode({"searchTerm": search_term, "srt": "products"})
-    return Request(
-        f"{SEARCH_URL}?{query}",
-        headers={
-            "Accept": "text/html",
-            "Cookie": _store_cookie(),
-            "User-Agent": "Mozilla/5.0 (compatible; publix-sorter/0.1)",
-        },
-    )
-
-
-def _parse_products(page: str) -> list[Product]:
-    parser = _SearchResultsParser()
-    parser.feed(page)
-    if parser.results_json is None:
-        raise PublixError(
-            "Publix search results were not found; the page may have changed"
-        )
-
-    try:
-        results = json.loads(parser.results_json)
-        store_products = results["storeProducts"]
-    except (json.JSONDecodeError, KeyError, TypeError) as error:
-        raise PublixError("Publix returned unrecognized search results") from error
-
-    products = []
-    for item in store_products:
-        locations = item.get("inStoreLocation") or []
-        location = ", ".join(locations) or "Location unavailable"
-        products.append(Product(name=item["title"], location=location))
-    return products
-
-
-def search(search_term: str) -> list[Product]:
-    try:
-        with urlopen(_search_request(search_term), timeout=30) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            page = response.read().decode(charset)
-    except HTTPError as error:
-        raise PublixError(f"Publix returned HTTP {error.code}") from error
-    except URLError as error:
-        raise PublixError(f"Could not reach Publix: {error.reason}") from error
-    except TimeoutError as error:
-        raise PublixError("The request to Publix timed out") from error
-
-    return _parse_products(page)
+from publix_sorter.publix import (
+    STORE_NAME,
+    STORE_NUMBER,
+    Product,
+    PublixError,
+    search,
+)
+from publix_sorter.sorter import (
+    LocationCache,
+    SorterError,
+    default_cache_path,
+    sort_grocery_items,
+)
 
 
 def _print_products(products: list[Product]) -> None:
@@ -116,29 +34,107 @@ def _print_products(products: list[Product]) -> None:
         print(f"{product.name:<{name_width}}  {product.location}")
 
 
-def main() -> None:
+def _parse_grocery_items(values: list[str]) -> list[str]:
+    items = []
+    for value in values:
+        for line in value.splitlines():
+            item = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "", line).strip()
+            if item:
+                items.append(item)
+    return items
+
+
+def _read_grocery_items(values: list[str], file_name: str | None) -> list[str]:
+    if values and file_name:
+        raise SorterError("Use grocery item arguments or --file, not both")
+    if file_name:
+        try:
+            content = (
+                sys.stdin.read()
+                if file_name == "-"
+                else Path(file_name).read_text(encoding="utf-8")
+            )
+        except OSError as error:
+            raise SorterError(f"Could not read grocery list: {file_name}") from error
+        items = _parse_grocery_items([content])
+    elif values:
+        items = _parse_grocery_items(values)
+    else:
+        items = _parse_grocery_items([sys.stdin.read()])
+    if not items:
+        raise SorterError("The grocery list is empty")
+    return items
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Search Publix products at Chasewood Plaza (store 228) and show "
-            "their in-store locations."
+            "Search or sort groceries at Chasewood Plaza (Publix store 228)."
         )
     )
-    parser.add_argument(
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    search_parser = commands.add_parser(
+        "search", help="find product names and in-store locations"
+    )
+    search_parser.add_argument(
         "search_term",
         nargs="+",
         help="product to search for, for example: pasta",
     )
-    args = parser.parse_args()
-    search_term = " ".join(args.search_term)
+
+    sort_parser = commands.add_parser(
+        "sort", help="sort a grocery list into store walking order"
+    )
+    sort_parser.add_argument(
+        "items",
+        nargs="*",
+        help="grocery items; when omitted, read newline-separated items from stdin",
+    )
+    sort_parser.add_argument(
+        "-f", "--file", help="read grocery items from a text file, or - for stdin"
+    )
+    sort_parser.add_argument(
+        "--cache",
+        type=Path,
+        default=default_cache_path(),
+        help="location cache CSV path (default: %(default)s)",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    raw_arguments = list(sys.argv[1:] if argv is None else argv)
+    if raw_arguments and raw_arguments[0] not in {"search", "sort", "-h", "--help"}:
+        raw_arguments.insert(0, "search")
+    parser = _build_parser()
+    args = parser.parse_args(raw_arguments)
+
+    if args.command == "search":
+        search_term = " ".join(args.search_term)
+        try:
+            products = search(search_term)
+        except PublixError as error:
+            parser.exit(1, f"error: {error}\n")
+
+        print(f"Store: {STORE_NAME} (#{STORE_NUMBER})")
+        print(f'Search: "{search_term}"\n')
+        _print_products(products)
+        return
 
     try:
-        products = search(search_term)
-    except PublixError as error:
+        items = _read_grocery_items(args.items, args.file)
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise SorterError("OPENROUTER_API_KEY is not set")
+        sorted_items = sort_grocery_items(
+            items, api_key, LocationCache(args.cache.expanduser())
+        )
+    except SorterError as error:
         parser.exit(1, f"error: {error}\n")
 
-    print(f"Store: {STORE_NAME} (#{STORE_NUMBER})")
-    print(f'Search: "{search_term}"\n')
-    _print_products(products)
+    for item in sorted_items:
+        print(f"- {item.item}")
 
 
 if __name__ == "__main__":
