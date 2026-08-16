@@ -22,6 +22,15 @@ uv run publix-sorter sort \
   "cheddar cheese"
 ```
 
+The sorted output includes the selected store location as an inline comment:
+
+```text
+- grapes - green  # Produce
+- apples x4  # Produce
+- cheddar cheese  # Rear Left - Cheese
+- penne pasta  # Aisle 6 - Pasta & Pasta Sauce
+```
+
 Or read a bulleted, newline-separated list from a file or stdin:
 
 ```console

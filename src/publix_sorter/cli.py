@@ -134,7 +134,13 @@ def main(argv: list[str] | None = None) -> None:
         parser.exit(1, f"error: {error}\n")
 
     for item in sorted_items:
-        print(f"- {item.item}")
+        location = item.location.strip()
+        comment = (
+            f"  # {location}"
+            if location.casefold() not in {"", "unknown", "location unavailable"}
+            else ""
+        )
+        print(f"- {item.item}{comment}")
 
 
 if __name__ == "__main__":
