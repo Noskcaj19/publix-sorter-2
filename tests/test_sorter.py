@@ -94,11 +94,11 @@ class ModelSortingTests(unittest.TestCase):
                                 {
                                     "items": [
                                         {
-                                            "item": "cheddar cheese",
+                                            "index": 1,
                                             "location": "Deli",
                                         },
                                         {
-                                            "item": "penne pasta",
+                                            "index": 0,
                                             "location": "Aisle 6",
                                         },
                                     ]
@@ -139,12 +139,34 @@ class ModelSortingTests(unittest.TestCase):
         self.assertEqual(tool_message["role"], "tool")
         self.assertEqual(len(json.loads(tool_message["content"])["results"]), 1)
 
-    def test_rejects_model_output_that_changes_an_item(self) -> None:
+    def test_reconstructs_exact_item_text_from_model_indices(self) -> None:
+        original_items = ["Parmesan cheese — 1 cup", "broccoli"]
         content = json.dumps(
-            {"items": [{"item": "green grapes", "location": "Produce"}]}
+            {
+                "items": [
+                    {"index": 1, "location": "Produce"},
+                    {"index": 0, "location": "Deli"},
+                ]
+            }
         )
-        with self.assertRaisesRegex(SorterError, "changed or omitted"):
-            _parse_sorted_items(content, ["grapes - green"])
+
+        result = _parse_sorted_items(content, original_items)
+
+        self.assertEqual(
+            [item.item for item in result], ["broccoli", "Parmesan cheese — 1 cup"]
+        )
+
+    def test_rejects_duplicate_model_indices(self) -> None:
+        content = json.dumps(
+            {
+                "items": [
+                    {"index": 0, "location": "Produce"},
+                    {"index": 0, "location": "Produce"},
+                ]
+            }
+        )
+        with self.assertRaisesRegex(SorterError, "duplicated or omitted"):
+            _parse_sorted_items(content, ["grapes", "apples"])
 
 
 if __name__ == "__main__":
